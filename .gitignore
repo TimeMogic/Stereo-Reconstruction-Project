@@ -1,0 +1,16 @@
+# build artifacts
+build/
+dist/
+output/
+
+# data
+data/
+datasets/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# logs
+*.log

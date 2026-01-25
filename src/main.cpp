@@ -50,7 +50,7 @@ static cv::Mat loadPFM(const std::string& path) {
 int main() {
     try {
         // 1) Load dataset
-        auto data = loadMiddlebury("./data/artroom1");
+        auto data = loadMiddlebury("./data/Backpack");
         std::cout << "Loaded images: "
                   << data.img_left.cols << " x "
                   << data.img_left.rows << std::endl;
@@ -113,9 +113,9 @@ int main() {
         // Middlebury GT disparity for left image is disp0.pfm
         cv::Mat disp_gt_f;
         try {
-            const std::string gt_path1 = "./data/artroom1/disp0.pfm";
-            const std::string gt_path2 = "../data/artroom1/disp0.pfm";
-            const std::string gt_path3 = "/workspace/data/artroom1/disp0.pfm";
+            const std::string gt_path1 = "./data/Backpack/disp0.pfm";
+            const std::string gt_path2 = "../data/Backpack/disp0.pfm";
+            const std::string gt_path3 = "/workspace/data/Backpack/disp0.pfm";
 
             if (std::filesystem::exists(gt_path1)) disp_gt_f = loadPFM(gt_path1);
             else if (std::filesystem::exists(gt_path2)) disp_gt_f = loadPFM(gt_path2);
@@ -183,9 +183,10 @@ int main() {
 
         // 9) Save colored point cloud (PLY)
         // Use rectL for color, because disparity is computed from rectified images
-        const float DISP_MIN = 1.0f;
-        const float DISP_MAX = (data.vmax > 0 ? (float)data.vmax : (float)dmax);
-        const float DOFFS    = (float)data.doffs;
+        const float VMIN  = (float)data.vmin;   // valid minimum estimated disparity
+        const float VMAX  = (float)data.vmax;   // valid maximum estimated disparity
+        const float DOFFS = (float)data.doffs;  // disparity offset for geometry
+
         
         const float Z_MIN_M = 0.2f;  // tune
         const float Z_MAX_M = 50.0f; // tune
@@ -196,15 +197,20 @@ int main() {
 
         for (int y = 0; y < disparity_f.rows; ++y) {
             for (int x = 0; x < disparity_f.cols; ++x) {
-                float d = disparity_f.at<float>(y, x);
-                if (!std::isfinite(d)) continue;
+                float d_est = disparity_f.at<float>(y, x);
+                if (!std::isfinite(d_est) || d_est <= 0) continue;
 
-                d -= DOFFS;
-                if (d < DISP_MIN || d > DISP_MAX) continue;
+                // Filter by dataset-recommended disparity range (estimated disparity)
+                if (d_est < VMIN || d_est > VMAX) continue;
 
-                float Z_mm = (float)(fx * B_mm / d);
+                // Add disparity offset ONLY for geometry / depth computation
+                float d_geom = d_est + DOFFS;
+
+                float Z_mm = (float)(fx * B_mm / d_geom);
                 float Z_m  = Z_mm * 0.001f;
                 if (Z_m < Z_MIN_M || Z_m > Z_MAX_M) continue;
+
+
 
                 float X_m = (float)((x - cx) * Z_mm / fx) * 0.001f;
                 float Y_m = (float)((y - cy) * Z_mm / fy) * 0.001f;
@@ -244,13 +250,17 @@ int main() {
         // Second pass: write points, centered by subtracting centroid
         for (int y = 0; y < disparity_f.rows; ++y) {
             for (int x = 0; x < disparity_f.cols; ++x) {
-                float d = disparity_f.at<float>(y, x);
-                if (!std::isfinite(d)) continue;
 
-                d -= DOFFS;
-                if (d < DISP_MIN || d > DISP_MAX) continue;
+                float d_est = disparity_f.at<float>(y, x);
+                if (!std::isfinite(d_est) || d_est <= 0) continue;
 
-                float Z_mm = (float)(fx * B_mm / d);
+                // Filter by dataset-recommended disparity range (estimated disparity)
+                if (d_est < VMIN || d_est > VMAX) continue;
+
+                // Add disparity offset ONLY for geometry / depth computation
+                float d_geom = d_est + DOFFS;
+
+                float Z_mm = (float)(fx * B_mm / d_geom);
                 float Z_m  = Z_mm * 0.001f;
                 if (Z_m < Z_MIN_M || Z_m > Z_MAX_M) continue;
 

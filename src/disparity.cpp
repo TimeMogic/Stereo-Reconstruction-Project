@@ -12,7 +12,7 @@ cv::Mat computeDisparity(const cv::Mat& rectL, const cv::Mat& rectR) {
 
     // 2) SGBM key parameters
     int minDisp   = 0;
-    int numDisp   = 160;   // Must be a multiple of 16; covers up to ~vmax=142
+    int numDisp   = 240;   // Must be a multiple of 16; covers up to ~vmax=142
     int blockSize = 5;
 
     auto sgbm = cv::StereoSGBM::create(minDisp, numDisp, blockSize);

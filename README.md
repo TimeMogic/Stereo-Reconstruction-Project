@@ -22,50 +22,68 @@ Windows / macOS / Linux 均可
 ⚠️ 不需要安装 OpenCV / CMake / 编译器
 
 三、项目结构
+
+```
 stereo_reconstruction/
 ├── Dockerfile
 ├── CMakeLists.txt
 ├── include/
 ├── src/
-├── data/
-│   └── artroom1/
+├── data/ #需要从链接中下载到文件夹下
+│   └── （比如）artroom1/
 │       ├── im0.png
 │       ├── im1.png
 │       └── calib.txt
 ├── output/        # 运行后自动生成
 └── README.md
+```
 
-四、如何运行（3 步）
+四、数据集下载链接
+
+[Middlebury Stereo Dataset - Backpack-imperfect](https://vision.middlebury.edu/stereo/data/scenes2014/datasets/Backpack-imperfect/)
+
+下载完数据集解压之后，请放在 `data` 文件夹中。
+
+五、如何运行（3 步）
+
 1️⃣ 进入项目目录
+```bash
 cd stereo_reconstruction
+```
 
 2️⃣ 构建 Docker 镜像（只需一次）
+```bash
 docker build -t stereo_recon .
+```
 
 3️⃣ 运行程序（推荐命令）
+```bash
 docker run --rm \
   -v "$(pwd)/data:/workspace/data" \
   -v "$(pwd)/output:/workspace/output" \
   stereo_recon
-
+```
 
 Windows PowerShell 用户请使用：
-
+```powershell
 docker run --rm `
   -v ${PWD}/data:/workspace/data `
   -v ${PWD}/output:/workspace/output `
   stereo_recon
+```
 
-五、查看结果
+六、查看结果
 1️⃣ 查看视差图
+```plaintext
 output/disparity.png
+```
 
 2️⃣ 查看点云
 
 打开以下文件：
-
+```plaintext
 output/points.ply
-
+```
 
 推荐软件：
 
@@ -75,30 +93,3 @@ MeshLab
 如果打开后什么也看不到，请点击：
 
 MeshLab：View → Reset Trackball 或 Fit to Screen
-
-六、常见问题（FAQ）
-Q1：运行很慢 / 卡住？
-
-第一次 docker build 会安装 OpenCV，需要几分钟
-
-之后运行会很快
-
-Q2：points.ply 看起来像“金字塔”？
-
-已在代码中对 Middlebury 数据做了视差和深度裁剪
-
-如果仍有问题，请联系项目作者
-
-Q3：可以换数据集吗？
-
-可以
-
-需满足 Middlebury 双目格式：
-
-im0.png
-
-im1.png
-
-calib.txt
-
-

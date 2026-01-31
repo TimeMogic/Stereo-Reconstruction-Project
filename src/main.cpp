@@ -12,40 +12,12 @@
 #include "epipolar.h"
 #include "rectification.h"
 #include "disparity.h"
+#include "evaluation.h"
+#include "reconstruction.h"
+#include "pfm_io.h"
 
 // ---- PFM loader (Middlebury GT disparity: disp0.pfm / disp1.pfm) ----
-static cv::Mat loadPFM(const std::string& path) {
-    std::ifstream ifs(path, std::ios::binary);
-    if (!ifs) throw std::runtime_error("Cannot open PFM: " + path);
 
-    std::string type;
-    ifs >> type; // "Pf" or "PF"
-    int w = 0, h = 0;
-    ifs >> w >> h;
-
-    float scale = 0.f;
-    ifs >> scale;
-    ifs.get(); // consume single whitespace/newline after header
-
-    const bool color = (type == "PF");
-    if (type != "Pf" && type != "PF") {
-        throw std::runtime_error("Invalid PFM header (expect Pf/PF): " + path);
-    }
-
-    const int channels = color ? 3 : 1;
-    cv::Mat img(h, w, (channels == 1) ? CV_32FC1 : CV_32FC3);
-
-    // PFM stores rows bottom-to-top
-    for (int y = h - 1; y >= 0; --y) {
-        ifs.read(reinterpret_cast<char*>(img.ptr<float>(y)),
-                 sizeof(float) * w * channels);
-        if (!ifs) throw std::runtime_error("PFM read failed: " + path);
-    }
-
-    // scale sign indicates endianness (negative = little endian). Most Middlebury are little-endian.
-    // On x86 little-endian machines, we typically don't need to byte-swap.
-    return img;
-}
 
 int main() {
     try {
@@ -181,113 +153,32 @@ int main() {
                   << " vmax=" << data.vmax
                   << std::endl;
 
-        // 9) Save colored point cloud (PLY)
-        // Use rectL for color, because disparity is computed from rectified images
-        const float VMIN  = (float)data.vmin;   // valid minimum estimated disparity
-        const float VMAX  = (float)data.vmax;   // valid maximum estimated disparity
-        const float DOFFS = (float)data.doffs;  // disparity offset for geometry
+        // 9) Reconstruct colored point cloud and save to PLY
+        ReconstructionParams rp;
+        rp.vmin = (float)data.vmin;
+        rp.vmax = (float)data.vmax;
+        rp.doffs = (float)data.doffs;
+        rp.z_min_m = 0.2f;
+        rp.z_max_m = 50.0f;
+        rp.center = true;
 
-        
-        const float Z_MIN_M = 0.2f;  // tune
-        const float Z_MAX_M = 50.0f; // tune
+        auto rr = saveColoredPointCloudPLY(
+            "output/points.ply",
+            disparity_f,
+            data.img_left_color,
+            data.K,
+            data.baseline,
+            rp
+        );
 
-        // First pass: count valid points AND accumulate centroid
-        size_t valid_count = 0;
-        double sumX = 0.0, sumY = 0.0, sumZ = 0.0;
-
-        for (int y = 0; y < disparity_f.rows; ++y) {
-            for (int x = 0; x < disparity_f.cols; ++x) {
-                float d_est = disparity_f.at<float>(y, x);
-                if (!std::isfinite(d_est) || d_est <= 0) continue;
-
-                // Filter by dataset-recommended disparity range (estimated disparity)
-                if (d_est < VMIN || d_est > VMAX) continue;
-
-                // Add disparity offset ONLY for geometry / depth computation
-                float d_geom = d_est + DOFFS;
-
-                float Z_mm = (float)(fx * B_mm / d_geom);
-                float Z_m  = Z_mm * 0.001f;
-                if (Z_m < Z_MIN_M || Z_m > Z_MAX_M) continue;
-
-
-
-                float X_m = (float)((x - cx) * Z_mm / fx) * 0.001f;
-                float Y_m = (float)((y - cy) * Z_mm / fy) * 0.001f;
-
-                sumX += X_m;
-                sumY += Y_m;
-                sumZ += Z_m;
-                valid_count++;
-            }
-        }
-
-        double mx = 0.0, my = 0.0, mz = 0.0;
-        if (valid_count > 0) {
-            mx = sumX / (double)valid_count;
-            my = sumY / (double)valid_count;
-            mz = sumZ / (double)valid_count;
-        }
-
-        std::cout << "Centroid (m): mx=" << mx << " my=" << my << " mz=" << mz << "\n";
-
-        std::ofstream ofs("output/points.ply");
-        if (!ofs.is_open()) {
-            throw std::runtime_error("Failed to open output/points.ply");
-        }
-
-        ofs << "ply\n";
-        ofs << "format ascii 1.0\n";
-        ofs << "element vertex " << valid_count << "\n";
-        ofs << "property float x\n";
-        ofs << "property float y\n";
-        ofs << "property float z\n";
-        ofs << "property uchar red\n";
-        ofs << "property uchar green\n";
-        ofs << "property uchar blue\n";
-        ofs << "end_header\n";
-
-        // Second pass: write points, centered by subtracting centroid
-        for (int y = 0; y < disparity_f.rows; ++y) {
-            for (int x = 0; x < disparity_f.cols; ++x) {
-
-                float d_est = disparity_f.at<float>(y, x);
-                if (!std::isfinite(d_est) || d_est <= 0) continue;
-
-                // Filter by dataset-recommended disparity range (estimated disparity)
-                if (d_est < VMIN || d_est > VMAX) continue;
-
-                // Add disparity offset ONLY for geometry / depth computation
-                float d_geom = d_est + DOFFS;
-
-                float Z_mm = (float)(fx * B_mm / d_geom);
-                float Z_m  = Z_mm * 0.001f;
-                if (Z_m < Z_MIN_M || Z_m > Z_MAX_M) continue;
-
-                float X_m = (float)((x - cx) * Z_mm / fx) * 0.001f;
-                float Y_m = (float)((y - cy) * Z_mm / fy) * 0.001f;
-
-                // color from left color image (BGR)
-                cv::Vec3b c = data.img_left_color.at<cv::Vec3b>(y, x);
-
-                // centered coordinates
-                float Xc = (float)(X_m - mx);
-                float Yc = (float)(Y_m - my);
-                float Zc = (float)(Z_m - mz);
-
-                ofs << Xc << " " << Yc << " " << Zc << " "
-                    << (int)c[2] << " "
-                    << (int)c[1] << " "
-                    << (int)c[0] << "\n";
-            }
-        }
-
-        ofs.close();
-
+        std::cout << "Centroid (m): mx=" << rr.centroid_m[0]
+          << " my=" << rr.centroid_m[1]
+          << " mz=" << rr.centroid_m[2] << "\n";
 
         std::cout << "Saved colored point cloud with "
-                  << valid_count
-                  << " points to output/points.ply\n";
+          << rr.valid_points
+          << " points to output/points.ply\n";
+
         std::cout << "Done.\n";
     }
     catch (const cv::Exception& e) {

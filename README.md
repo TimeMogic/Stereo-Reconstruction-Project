@@ -66,9 +66,9 @@ docker run --rm \
 
 Windows PowerShell 用户请使用：
 ```powershell
-docker run --rm `
-  -v ${PWD}/data:/workspace/data `
-  -v ${PWD}/output:/workspace/output `
+docker run --rm \`
+  -v ${PWD}/data:/workspace/data \`
+  -v ${PWD}/output:/workspace/output\ `
   stereo_recon
 ```
 

@@ -82,54 +82,43 @@ int main() {
         std::cout << "Disparity float range: " << dmin << " ~ " << dmax << std::endl;
 
         // ===== Bad Pixel Ratio (Middlebury) =====
-        // Middlebury GT disparity for left image is disp0.pfm
-        cv::Mat disp_gt_f;
-        try {
-            const std::string gt_path1 = "./data/Backpack/disp0.pfm";
-            const std::string gt_path2 = "../data/Backpack/disp0.pfm";
-            const std::string gt_path3 = "/workspace/data/Backpack/disp0.pfm";
+        
+        // ===== Middlebury Evaluation (module) =====
+    {
+        const std::string scene_dir = "./data/Backpack";
 
-            if (std::filesystem::exists(gt_path1)) disp_gt_f = loadPFM(gt_path1);
-            else if (std::filesystem::exists(gt_path2)) disp_gt_f = loadPFM(gt_path2);
-            else if (std::filesystem::exists(gt_path3)) disp_gt_f = loadPFM(gt_path3);
-            else {
-                std::cout << "Bad Pixel Ratio: skipped (GT disp0.pfm not found)\n";
+        cv::Mat disp_gt_f = tryLoadDisp0PFM(scene_dir);
+        if (disp_gt_f.empty()) {
+            std::cout << "Evaluation: skipped (GT disp0.pfm not found or failed to load)\n";
+        } else {
+            const float TAU = 4.0f;
+
+            auto eval = evaluateMiddleburyDisparity(
+                disparity_f,
+                disp_gt_f,
+                (float)data.doffs,
+                (float)data.vmin,
+                (float)data.vmax,
+                TAU,
+                /*use_vmin_vmax_filter=*/false,
+                /*compute_mae_rmse=*/true
+            );
+
+            std::cout << "Eval (tau=" << TAU << "px)\n";
+            std::cout << "  Valid pixels: " << eval.total << "\n";
+            std::cout << "  BPR raw   : " << eval.bpr_raw_percent
+                    << " % (" << eval.bad_raw << " / " << eval.total << ")\n";
+            std::cout << "  BPR +doffs: " << eval.bpr_geom_percent
+                    << " % (" << eval.bad_geom << " / " << eval.total << ")\n";
+
+            if (eval.total > 0) {
+                std::cout << "  MAE raw   : " << eval.mae_raw
+                        << " px, RMSE raw   : " << eval.rmse_raw << " px\n";
+                std::cout << "  MAE +doffs: " << eval.mae_geom
+                        << " px, RMSE +doffs: " << eval.rmse_geom << " px\n";
             }
-        } catch (const std::exception& e) {
-            std::cout << "Bad Pixel Ratio: skipped (failed to load GT: " << e.what() << ")\n";
         }
-
-        if (!disp_gt_f.empty()) {
-            const float TAU = 4.0f;   // 4-pixel threshold (Middlebury standard)
-
-            size_t bad = 0;
-            size_t total = 0;
-
-            // Use overlapping region in case sizes differ
-            const int H = std::min(disparity_f.rows, disp_gt_f.rows);
-            const int W = std::min(disparity_f.cols, disp_gt_f.cols);
-
-            for (int y = 0; y < H; ++y) {
-                for (int x = 0; x < W; ++x) {
-                    float d_est = disparity_f.at<float>(y, x);
-                    float d_gt  = disp_gt_f.at<float>(y, x);
-
-                    // GT invalid pixels must be skipped (Middlebury convention)
-                    if (!std::isfinite(d_gt) || d_gt <= 0) continue;
-                    if (!std::isfinite(d_est) || d_est <= 0) continue;
-
-                    total++;
-                    if (std::abs(d_est - d_gt) > TAU) bad++;
-                }
-            }
-
-            double bad_pixel_ratio = (total > 0) ? (double)bad / (double)total : 0.0;
-
-            std::cout << "Bad Pixel Ratio (tau = " << TAU << " px): "
-                      << bad_pixel_ratio * 100.0 << " % ("
-                      << bad << " / " << total << ")"
-                      << std::endl;
-        }
+    }
 
         // 7) Save disparity visualization
         if (dmax > 0) {

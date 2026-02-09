@@ -31,12 +31,10 @@ static inline bool finite_pos(float v) {
 MiddleburyEvalResult evaluateMiddleburyDisparity(
     const cv::Mat& disparity_f,
     const cv::Mat& disp_gt_f,
-    float doffs,
     float vmin,
     float vmax,
     float tau,
-    bool use_vmin_vmax_filter,
-    bool compute_mae_rmse
+    bool use_vmin_vmax_filter
 ) {
     MiddleburyEvalResult res;
 
@@ -55,10 +53,9 @@ MiddleburyEvalResult evaluateMiddleburyDisparity(
     const int H = std::min(disparity_f.rows, disp_gt_f.rows);
     const int W = std::min(disparity_f.cols, disp_gt_f.cols);
 
-    double sum_abs_raw = 0.0, sum_sq_raw = 0.0;
-    double sum_abs_geom = 0.0, sum_sq_geom = 0.0;
-
     const bool enable_range_filter = use_vmin_vmax_filter && (vmax > vmin) && std::isfinite(vmin) && std::isfinite(vmax);
+
+    double sum_sq_raw = 0.0;
 
     for (int y = 0; y < H; ++y) {
         const float* est_row = disparity_f.ptr<float>(y);
@@ -78,33 +75,16 @@ MiddleburyEvalResult evaluateMiddleburyDisparity(
 
             res.total++;
 
-            const float err_raw  = std::abs(d_est - d_gt);
-            const float d_geom   = d_est + doffs;
-            const float err_geom = std::abs(d_geom - d_gt);
+            const float err_raw = std::abs(d_est - d_gt);
+            if (err_raw > tau) res.bad_raw++;
 
-            if (err_raw > tau)  res.bad_raw++;
-            if (err_geom > tau) res.bad_geom++;
-
-            if (compute_mae_rmse) {
-                sum_abs_raw  += err_raw;
-                sum_sq_raw   += (double)err_raw * (double)err_raw;
-                sum_abs_geom += err_geom;
-                sum_sq_geom  += (double)err_geom * (double)err_geom;
-            }
+            sum_sq_raw += (double)err_raw * (double)err_raw;
         }
     }
 
     if (res.total > 0) {
-        res.bpr_raw_percent  = 100.0 * (double)res.bad_raw  / (double)res.total;
-        res.bpr_geom_percent = 100.0 * (double)res.bad_geom / (double)res.total;
-
-        if (compute_mae_rmse) {
-            res.mae_raw  = sum_abs_raw  / (double)res.total;
-            res.rmse_raw = std::sqrt(sum_sq_raw / (double)res.total);
-
-            res.mae_geom  = sum_abs_geom / (double)res.total;
-            res.rmse_geom = std::sqrt(sum_sq_geom / (double)res.total);
-        }
+        res.bpr_raw_percent = 100.0 * (double)res.bad_raw / (double)res.total;
+        res.rmse_raw = std::sqrt(sum_sq_raw / (double)res.total);
     }
 
     return res;

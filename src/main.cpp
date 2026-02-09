@@ -5,6 +5,9 @@
 #include <filesystem>
 #include <cmath>
 #include <stdexcept>
+#include <chrono>
+using Clock = std::chrono::steady_clock;
+using ms = std::chrono::duration<double, std::milli>;
 
 // project headers
 #include "dataset.h"
@@ -61,7 +64,13 @@ int main() {
         // cv::Mat disparity = computeDisparity(rectL, rectR);
 
         // ===== DISABLE RECTIFIED DISPARITY: compute on original images =====
+        auto t_disp_cv_start = Clock::now();
         cv::Mat disparity = computeDisparity(data.img_left, data.img_right);
+        auto t_disp_cv_end = Clock::now();
+
+        auto t_disp_ours_start = Clock::now();
+        cv::Mat disparity_ours = computeDisparityBM(data.img_left, data.img_right);
+        auto t_disp_ours_end = Clock::now();
 
         double dmin_raw, dmax_raw;
         cv::minMaxLoc(disparity, &dmin_raw, &dmax_raw);
@@ -75,6 +84,13 @@ int main() {
             disparity_f = disparity.clone();
         } else {
             throw std::runtime_error("Unsupported disparity type");
+        }
+
+        cv::Mat disparity_ours_f;
+        if (disparity_ours.type() == CV_16S) {
+            disparity_ours.convertTo(disparity_ours_f, CV_32F, 1.0 / 16.0);
+        } else if (disparity_ours.type() == CV_32F) {
+            disparity_ours_f = disparity_ours.clone();
         }
 
         double dmin, dmax;
@@ -96,27 +112,32 @@ int main() {
             auto eval = evaluateMiddleburyDisparity(
                 disparity_f,
                 disp_gt_f,
-                (float)data.doffs,
                 (float)data.vmin,
                 (float)data.vmax,
                 TAU,
-                /*use_vmin_vmax_filter=*/false,
-                /*compute_mae_rmse=*/true
+                /*use_vmin_vmax_filter=*/false
             );
 
             std::cout << "Eval (tau=" << TAU << "px)\n";
             std::cout << "  Valid pixels: " << eval.total << "\n";
             std::cout << "  BPR raw   : " << eval.bpr_raw_percent
-                    << " % (" << eval.bad_raw << " / " << eval.total << ")\n";
-            std::cout << "  BPR +doffs: " << eval.bpr_geom_percent
-                    << " % (" << eval.bad_geom << " / " << eval.total << ")\n";
+                      << " % (" << eval.bad_raw << " / " << eval.total << ")\n";
+            std::cout << "  RMSE raw  : " << eval.rmse_raw << " px\n";
 
-            if (eval.total > 0) {
-                std::cout << "  MAE raw   : " << eval.mae_raw
-                        << " px, RMSE raw   : " << eval.rmse_raw << " px\n";
-                std::cout << "  MAE +doffs: " << eval.mae_geom
-                        << " px, RMSE +doffs: " << eval.rmse_geom << " px\n";
-            }
+            auto eval_ours = evaluateMiddleburyDisparity(
+                disparity_ours_f,
+                disp_gt_f,
+                (float)data.vmin,
+                (float)data.vmax,
+                TAU,
+                /*use_vmin_vmax_filter=*/false
+            );
+
+            std::cout << "Eval OURS (BM) (tau=" << TAU << "px)\n";
+            std::cout << "  Valid pixels: " << eval_ours.total << "\n";
+            std::cout << "  BPR raw   : " << eval_ours.bpr_raw_percent
+                      << " % (" << eval_ours.bad_raw << " / " << eval_ours.total << ")\n";
+            std::cout << "  RMSE raw  : " << eval_ours.rmse_raw << " px\n";
         }
     }
 
@@ -151,6 +172,7 @@ int main() {
         rp.z_max_m = 50.0f;
         rp.center = true;
 
+        auto t_rec_cv_start = Clock::now();
         auto rr = saveColoredPointCloudPLY(
             "output/points.ply",
             disparity_f,
@@ -159,6 +181,18 @@ int main() {
             data.baseline,
             rp
         );
+        auto t_rec_cv_end = Clock::now();
+
+        auto t_rec_ours_start = Clock::now();
+        auto rr_ours = saveColoredPointCloudPLY_OURS(
+            "output/points_ours.ply",
+            disparity_ours_f,
+            data.img_left_color,
+            data.K,
+            data.baseline, // replace with your custom baseline if needed
+            rp
+        );
+        auto t_rec_ours_end = Clock::now();
 
         std::cout << "Centroid (m): mx=" << rr.centroid_m[0]
           << " my=" << rr.centroid_m[1]
@@ -167,6 +201,17 @@ int main() {
         std::cout << "Saved colored point cloud with "
           << rr.valid_points
           << " points to output/points.ply\n";
+
+        std::cout << "\n===== Runtime =====\n";
+        std::cout << "[OpenCV] Disparity: "
+                  << ms(t_disp_cv_end - t_disp_cv_start).count() << " ms\n";
+        std::cout << "[OpenCV] Reconstruction: "
+                  << ms(t_rec_cv_end - t_rec_cv_start).count() << " ms\n";
+
+        std::cout << "[OURS] Disparity: "
+                  << ms(t_disp_ours_end - t_disp_ours_start).count() << " ms\n";
+        std::cout << "[OURS] Reconstruction: "
+                  << ms(t_rec_ours_end - t_rec_ours_start).count() << " ms\n";
 
         std::cout << "Done.\n";
     }

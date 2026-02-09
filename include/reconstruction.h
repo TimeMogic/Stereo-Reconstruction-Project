@@ -11,6 +11,8 @@ struct ReconstructionParams {
     float z_min_m = 0.2f;  // depth range filter in meters
     float z_max_m = 50.0f;
     bool center = true;    // subtract centroid before writing
+    // OURS: baseline scaling factor (1.0 keeps original baseline)
+    double baseline_scale = 1.0;
 };
 
 struct ReconstructionResult {
@@ -31,6 +33,15 @@ struct ReconstructionResult {
 //
 // Throws std::runtime_error on errors (e.g. file open, invalid inputs)
 ReconstructionResult saveColoredPointCloudPLY(
+    const std::string& ply_path,
+    const cv::Mat& disparity_f,
+    const cv::Mat& img_left_color,
+    const cv::Mat& K,
+    double baseline_mm,
+    const ReconstructionParams& params
+);
+
+ReconstructionResult saveColoredPointCloudPLY_OURS(
     const std::string& ply_path,
     const cv::Mat& disparity_f,
     const cv::Mat& img_left_color,

@@ -2,6 +2,10 @@
 
 This project is a **Stereo Vision–based 3D Reconstruction** demo implemented in **C++ with OpenCV** and fully packaged with **Docker**. The Docker setup ensures the project can be built and run **reproducibly** on **Windows, macOS, and Linux**, without requiring any local dependency installation.
 
+**Link**: https://github.com/TimeMogic/Stereo-Reconstruction-Project
+
+
+
 ---
 
 ## 1. What You Will Get

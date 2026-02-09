@@ -1,62 +1,81 @@
-Stereo Reconstruction (Docker)
+# Stereo Reconstruction (Docker)
 
-本项目是一个 基于双目视觉的 3D 重建（Stereo Reconstruction） 示例，
-使用 C++ + OpenCV 实现，并通过 Docker 封装，保证在 Windows / macOS / Linux 上可复现运行。
+This project is a **Stereo Vision–based 3D Reconstruction** demo implemented in **C++ with OpenCV** and fully packaged with **Docker**. The Docker setup ensures the project can be built and run **reproducibly** on **Windows, macOS, and Linux**, without requiring any local dependency installation.
 
-一、你能得到什么
+---
 
-运行完成后，会在 output/ 目录下生成：
+## 1. What You Will Get
 
-disparity.png：双目视差图
+After a successful run, the following outputs will be generated in the `output/` directory:
 
-points.ply：彩色 3D 点云（可用 MeshLab  打开）
+* **`disparity.png`** – the computed stereo disparity map
+* **`points.ply`** – a colored 3D point cloud (can be opened with MeshLab)
 
-二、运行环境（只需要这个）
+---
 
-Docker Desktop
+## 2. Runtime Requirements (Only This Is Needed)
 
-Windows / macOS / Linux 均可
+* **Docker Desktop**
 
-下载地址：https://www.docker.com/products/docker-desktop/
+  * Supported on Windows / macOS / Linux
+  * Download: [https://www.docker.com/products/docker-desktop/](https://www.docker.com/products/docker-desktop/)
 
-⚠️ 不需要安装 OpenCV / CMake / 编译器
+⚠️ You **do not** need to install OpenCV, CMake, or any compiler locally.
 
-三、项目结构
+---
 
-```
+## 3. Project Structure
+
+```text
 stereo_reconstruction/
 ├── Dockerfile
 ├── CMakeLists.txt
 ├── include/
 ├── src/
-├── data/ #需要从链接中下载到文件夹下
-│   └── （比如）artroom1/
+├── data/            # Download the dataset and place it here
+│   └── (e.g.) artroom1/
 │       ├── im0.png
 │       ├── im1.png
 │       └── calib.txt
-├── output/        # 运行后自动生成
+├── output/          # Automatically generated after running
 └── README.md
 ```
 
-四、数据集下载链接
+---
 
-[Middlebury Stereo Dataset - Backpack-imperfect](https://vision.middlebury.edu/stereo/data/scenes2014/datasets/Backpack-imperfect/)
+## 4. Dataset Download
 
-下载完数据集解压之后，请放在 `data` 文件夹中。
+This project uses the **Middlebury Stereo Dataset**.
 
-五、如何运行（3 步）
+**Recommended dataset:**
 
-1️⃣ 进入项目目录
+* Backpack (imperfect)
+* Link: [https://vision.middlebury.edu/stereo/data/scenes2014/datasets/Backpack-imperfect/](https://vision.middlebury.edu/stereo/data/scenes2014/datasets/Backpack-imperfect/)
+
+After downloading and extracting the dataset, place it under the `data/` directory, for example:
+
+```text
+data/Backpack-imperfect/
+```
+
+---
+
+## 5. How to Run (3 Steps)
+
+### Step 1: Enter the Project Directory
+
 ```bash
 cd stereo_reconstruction
 ```
 
-2️⃣ 构建 Docker 镜像（只需一次）
+### Step 2: Build the Docker Image (Only Once)
+
 ```bash
 docker build -t stereo_recon .
 ```
 
-3️⃣ 运行程序（推荐命令）
+### Step 3: Run the Program (Recommended)
+
 ```bash
 docker run --rm \
   -v "$(pwd)/data:/workspace/data" \
@@ -64,32 +83,48 @@ docker run --rm \
   stereo_recon
 ```
 
-Windows PowerShell 用户请使用：
+#### Windows (PowerShell)
+
 ```powershell
-docker run --rm \`
-  -v ${PWD}/data:/workspace/data \`
-  -v ${PWD}/output:/workspace/output\ `
+docker run --rm `
+  -v ${PWD}/data:/workspace/data `
+  -v ${PWD}/output:/workspace/output `
   stereo_recon
 ```
 
-六、查看结果
-1️⃣ 查看视差图
-```plaintext
+---
+
+## 6. Viewing the Results
+
+### 1️⃣ Disparity Map
+
+Open the following file:
+
+```text
 output/disparity.png
 ```
 
-2️⃣ 查看点云
+### 2️⃣ 3D Point Cloud
 
-打开以下文件：
-```plaintext
+Open the following file:
+
+```text
 output/points.ply
 ```
 
-推荐软件：
+**Recommended viewer:**
 
-MeshLab
+* **MeshLab**
 
+If nothing is visible after opening the point cloud, try:
 
-如果打开后什么也看不到，请点击：
+* `View → Reset Trackball`
+* or `View → Fit to Screen`
 
-MeshLab：View → Reset Trackball 或 Fit to Screen
+---
+
+## Notes
+
+* This project is intended as a **clean, minimal stereo reconstruction example**.
+* All computation is performed inside Docker for maximum reproducibility.
+* The code can be easily extended to support additional datasets or evaluation metrics.
